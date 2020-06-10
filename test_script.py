@@ -1,9 +1,12 @@
-from typing import List, Tuple, Iterator
+import sys
 import time
-from math import log2
 import bisect
+from typing import List, Tuple, Iterator
+from math import log2
 from functools import wraps
 from itertools import islice
+
+sys.setrecursionlimit(10000)
 
 
 # region 实用函数
@@ -60,19 +63,24 @@ class Wrappers:
 timer = Wrappers.timer
 deprecated = Wrappers.deprecated()
 
+_speedtest_counter = 1
 
-def speedtest(functions: tuple, arguments: tuple) -> None:
+
+def speedtest_format(functions, arguments) -> None:
     """
     对相似函数（参数类型都相同）统一进行速度测试，并输出结果
-    :param functions: 包含所有函数的tuple
-    :param arguments: 包含所有调用参数的tuple
+    :param functions: 包含所有函数的tuple或者list
+    :param arguments: 包含所有调用参数的tuple或者list
     :return:
     """
     if not functions:
         return
+    global _speedtest_counter
+    print('----- speedtest round %d -----' % _speedtest_counter)
+    _speedtest_counter += 1
     results = []  # 保存运行结果
     runtimes = []  # 保存运行时间
-    columnsize = [0, 0, 0]  # 保存表格的每一列宽
+    columnsize = [8, 6, 4]  # 保存表格的每一列宽
     # 开始调用
     for function in functions:
         # 进行调用，记录结果和运行时间
@@ -88,12 +96,64 @@ def speedtest(functions: tuple, arguments: tuple) -> None:
     print(c_style_format % ('Function', 'Return', 'Time'))  # 输出表头
     for i in range(len(results)):  # 输出函数，返回值，执行时间
         print((c_style_format + ' s') % (functions[i].__name__, results[i], runtimes[i]))
+    # 输出一致性
+    print('All equals: ' + str(all(  # 如果是list则sort后再比较
+        [(result == results[0]) if type(result) != list else (sorted(result) == sorted(results[0])) for result in results])))
     # 输出执行时间比
-    compareTimesStr = '执行时间比：'
+    compareTimesStr = 'Execution time ratio: '
     runtimesMin = min(runtimes)
+    if runtimesMin == 0.0:
+        return
     for runtime in runtimes:
-        compareTimesStr += str(runtime / runtimesMin) + ': '
+        compareTimesStr += (str(runtime / runtimesMin) if runtime != runtimesMin else '1') + ': '
     print(compareTimesStr[:-2])
+
+
+def speedtest_realtime(functions, arguments) -> None:
+    """
+    对相似函数（参数类型都相同）统一进行速度测试，并实时的输出结果，但表格不一定对齐
+    :param functions: 包含所有函数的tuple或者list
+    :param arguments: 包含所有调用参数的tuple或者list
+    :return:
+    """
+    if not functions:
+        return
+    global _speedtest_counter
+    print('----- speedtest round %d -----' % _speedtest_counter)
+    _speedtest_counter += 1
+    results = []  # 保存运行结果
+    runtimes = []  # 保存运行时间
+    columnsize = [8, 6, 4]  # 保存表格的每一列宽
+    for function in functions:
+        columnsize[0] = max(columnsize[0], len(function.__name__))
+    # 开始输出表格
+    c_style_format = ('%-{}s|%-{}s|%-{}s'.format(*columnsize))  # C风格。实现了表格的左对齐
+    print(c_style_format % ('Function', 'Return', 'Time'))  # 输出表头
+    # 开始调用
+    for i, function in enumerate(functions):
+        print(c_style_format.split('|')[0] % function.__name__, end='|')
+        # 进行调用，记录结果和运行时间
+        start = time.time()
+        results.append(function(*arguments))
+        runtimes.append(time.time() - start)
+        if len(str(results[i])) > columnsize[1]:
+            columnsize[1] = len(str(results[i]))
+            c_style_format = ('%-{}s|%-{}s|%-{}s'.format(*columnsize))
+        print(c_style_format[c_style_format.find('|') + 1:] % (results[i], runtimes[i]), end='s\n')
+    # 输出一致性
+    print('All equals: ' + str(all(  # 如果是list则sort后再比较
+        [(result == results[0]) if type(result) != list else (sorted(result) == sorted(results[0])) for result in results])))
+    # 输出执行时间比
+    compareTimesStr = 'Execution time ratio: '
+    runtimesMin = min(runtimes)
+    if runtimesMin == 0.0:
+        return
+    for runtime in runtimes:
+        compareTimesStr += (str(runtime / runtimesMin) if runtime != runtimesMin else '1') + ': '
+    print(compareTimesStr[:-2])
+
+
+speedtest = speedtest_realtime
 
 
 # endregion
@@ -286,24 +346,36 @@ class TreeUtil:
         :return:
         """
         if rootNode is not None:
-            yield from TreeUtil.preOrderTraversalIterator(rootNode.left)
-            yield from TreeUtil.preOrderTraversalIterator(rootNode.right)
+            yield from TreeUtil.postOrderTraversalIterator(rootNode.left)
+            yield from TreeUtil.postOrderTraversalIterator(rootNode.right)
             yield rootNode
 
     @staticmethod
-    def breadthFirstTraversal(rootNode: TreeNode) -> List[List[object]]:
+    def breadthFirstTraversal(rootNode: TreeNode) -> List[list]:
         """
         广度优先遍历，返回二维数组，一维是每层的元素List，二维是第几层
         :param rootNode: 根节点
         :return:
         """
-        resultList = []
+        return list(TreeUtil.breadthFirstTraversalIterator(rootNode))
+
+    @staticmethod
+    def breadthFirstTraversalIterator(rootNode: TreeNode) -> Iterator[list]:
+        """
+        广度优先遍历，每次返回一层的元素List
+        :param rootNode: 根节点
+        :return:
+        """
+        resultList = []  # 保存每一层元素的二维数组
         if rootNode is None:
-            return resultList
+            yield []
+            return
         queue = [(rootNode, 1)]  # 装有(元素, 层号)的队列
         while queue:
             node, level = queue.pop(0)
             if level > len(resultList):  # result中没有存过该level的元素
+                if resultList:
+                    yield resultList[level - 2]
                 resultList.append([node.val])
             else:
                 resultList[level - 1].append(node.val)
@@ -312,7 +384,7 @@ class TreeUtil:
                 queue.append((node.left, level + 1))
             if node.right:
                 queue.append((node.right, level + 1))
-        return resultList
+        yield resultList[-1]
 
     @staticmethod
     def findNodeByVal(rootNode: TreeNode, val: object):
@@ -352,18 +424,28 @@ class TreeUtil:
         :param rootNode: 根节点
         :return:
         """
-        maxLevel = TreeUtil.maxLevel(rootNode, cacheEnabled=True)  # 计算最大层数
+
+        def assign(index: int, element):
+            nonlocal valList
+            if index >= len(valList):  # 拓展数组
+                valList += [None] * (2 ** maxLevel - 1 - len(valList))
+            valList[index] = element  # 访问节点，储存val
+
+        if not rootNode:
+            return []
+        maxLevel = 1
         valList = [None] * (2 ** maxLevel - 1)  # 按照元素可能的最大个数，初始化变量列表
-        queue = [(rootNode, 0)]  # 储存(节点, 索引号)的队列
+        queue = [(rootNode, 1, 0)]  # 储存(节点, 索引号)的队列
         # 队列不为空时循环（这里为了直观所以用的是广度优先）
         while queue:
-            node, index = queue.pop(0)  # 取出节点和索引号
-            valList[index] = node.val  # 访问节点，储存val
+            node, level, index = queue.pop(0)  # 取出节点和索引号
+            maxLevel = max(maxLevel, level)
+            assign(index, node.val)
             # 左右节点和其对应的索引号入队列
             if node.left:
-                queue.append((node.left, (index + 1) * 2 - 1))
+                queue.append((node.left, level + 1, (index + 1) * 2 - 1))
             if node.right:
-                queue.append((node.right, (index + 1) * 2))
+                queue.append((node.right, level + 1, (index + 1) * 2))
         return valList
 
     @staticmethod
@@ -396,13 +478,12 @@ class TreeUtil:
 # endregion
 
 # region 常用算法
-class Prime:  # mao1112
+class Prime:
     """
     获得素数数组的高级实现。支持 in 和 [] 运算符，[]支持切片
     """
 
     def __init__(self):
-        self._n: int = 6  # 素数列表的长度
         self._list: List[int] = [2, 3, 5, 7, 11, 13]  # 保存所有现有的素数列表
 
     def __contains__(self, n: int) -> bool:
@@ -626,6 +707,7 @@ if __name__ == '__main__':
     # root.right.right.left.right = TreeUtil.createBinaryTree([-3, None, -5, None, None, None, -4])
     root = TreeUtil.createTreeByPreInOrder(preorder=[-5, -1, -4, -5, -5, 0, -1, -3, -5, -4, 2],
                                            inorder=[-1, -5, -5, -5, -4, -1, -3, -5, -4, 0, 2])
+    print(TreeUtil.breadthFirstTraversal(root))
     print(root)
 
 '''数据结构图
