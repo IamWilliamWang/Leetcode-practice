@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple
 from test_script import speedtest
 from test_script import binary_search
 import numpy as np
@@ -28,80 +28,89 @@ def minDistance(word1: str, word2: str) -> int:
 class Solution:
     def findLadders(self, beginWord: str, endWord: str, wordList: List[str]) -> List[List[str]]:
         @lru_cache(maxsize=None)
-        def geti(s: str):
+        def geti(s: str) -> int:  # 获取s的索引值
             return wordList.index(s)
 
+        # 如果为空则跳过
         if endWord not in wordList:
             return []
-        transfers: List[tuple] = []
-        # 记录无向图的所有边
-        for i, word1 in enumerate(wordList):
-            for j in range(i + 1, len(wordList)):
-                word2 = wordList[j]
-                if i == j:
-                    continue
-                if minDistance(word1, word2) == 1:
-                    c1, c2 = Counter(word1).items(), Counter(word2).items()
-                    differCh1, differCh2 = None, None
-                    for c in c1:
-                        if c not in c2:
-                            differCh1 = c[0]
-                    for c in c2:
-                        if c not in c1:
-                            differCh2 = c[0]
-                    transfers += [(word1, word2, differCh2)]
-                    transfers += [(word2, word1, differCh1)]
-                    # transferChar = (set(word1).difference(set(word2)) or set(word2).difference(set(word1))).pop()
-                    # transfers += [(word1, word2, transferChar)]
-                    # transfers += [(word2, word1, transferChar)]
 
-        # 把边转换成转移矩阵
-        transferMatrix = [[None] * len(wordList) for _ in range(len(wordList))]
-        for transferTuple in transfers:
-            fromStr, toStr, transferCh = transferTuple
-            transferMatrix[geti(fromStr)][geti(toStr)] = transferCh
-        queue = []  # BFS遍历的队列，(要访问的节点Str，其父节点Str，访问节点的层号)
-        for word in wordList:
+        # transfers: List[Tuple[str, str, str]] = []  # 保存转移状态
+        transfers = [[] for _ in range(len(wordList))]
+        # 逐个计算转移条件，并记录无向图
+        for i, word1 in enumerate(wordList):
+            for j in range(i + 1, len(wordList)):  # 两两进行比较
+                word2 = wordList[j]
+                if minDistance(word1, word2) == 1:  # 如果两个word只相差一个字符
+                    # c1, c2 = Counter(word1).items(), Counter(word2).items()  # 两个Counter
+                    # differCh1, differCh2 = None, None  # 与另一个不同的字母
+                    # for c in c1:
+                    #     if c not in c2:
+                    #         differCh1 = c[0]
+                    # for c in c2:
+                    #     if c not in c1:
+                    #         differCh2 = c[0]
+                    # transfers += [(word1, word2, differCh2)]  # 进行记录，相当于构建了无向图
+                    # transfers += [(word2, word1, differCh1)]
+                    transfers[geti(word1)].append(geti(word2))
+                    transfers[geti(word2)].append(geti(word1))
+
+        # 把无向图转换成转移矩阵 # 其实没必要，删掉后速度提升10%
+        # transferMatrix = [[None] * len(wordList) for _ in range(len(wordList))]
+        # for transferTuple in transfers:
+        #     fromStr, toStr, transferCh = transferTuple
+        #     transferMatrix[geti(fromStr)][geti(toStr)] = transferCh
+
+        # 从初始点进行BFS遍历，得到visitedInfo以便后面解析
+        queue = []
+        for word in wordList:  # 先找第一步，beginWord能转换成什么
             if minDistance(word, beginWord) == 1:
-                queue += [(word, beginWord, 2)]
-        visitedInfo = [(beginWord, None, 1)]
-        visitedStrSet = {beginWord}
-        endWordInVisitedListIndexes = []
-        while queue:
+                queue += [(word, beginWord, 2)]  # 迈入第二层，进入了转移矩阵的范围
+        visitedInfo = [(beginWord, None, 1)]  # 保存所有(要访问的节点Str，其父节点Str，访问节点的层号)。这里放入begin作为后面解析的终止条件
+        visitedStrSet = {beginWord}  # 保存访问过的节点
+        endWordInVisitedListIndexes = []  # endWord在visitedInfo中出现的位置
+        while queue:  # 开始遍历
             visitStr, parentStr, level = queue.pop(0)
+            # 如果出现了endWord，记录它的位置
             if visitStr == endWord:
                 endWordInVisitedListIndexes.append(len(visitedInfo))
+            # visit当前节点
             visitedInfo += [(visitStr, parentStr, level)]
             visitedStrSet.add(visitStr)
-            transferRow = transferMatrix[geti(visitStr)]
-            for i, transferCh in enumerate(transferRow):
-                if transferCh is not None and wordList[i] not in visitedStrSet:
-                    queue += [(wordList[i], visitStr, level + 1)]
+            # 向下一层拓展，在转移矩阵中找下一层
+            # transferRow = transferMatrix[geti(visitStr)]
+            # for i, transferCh in enumerate(transferRow):
+            #     if transferCh is not None and wordList[i] not in visitedStrSet:
+            #         queue += [(wordList[i], visitStr, level + 1)]
+            queue += [(wordList[i], visitStr, level + 1) for i in transfers[geti(visitStr)] if wordList[i] not in visitedStrSet]
+
+        # 解析BFS遍历结果visitedInfo，得到题目所求路径
         paths = []
-        for endWordIndex in endWordInVisitedListIndexes:
-            path = []
-            visitedInfoIndex = endWordIndex
+        for endWordIndex in endWordInVisitedListIndexes:  # 以每个endWord位置为末尾，生成路径
+            path = []  # 当前路径
+            visitedInfoIndex = endWordIndex  # 指向visitedInfo的指针
             while True:
-                nowStr = visitedInfo[visitedInfoIndex][0]
-                previousStr = visitedInfo[visitedInfoIndex][1]
-                nowLevel = visitedInfo[visitedInfoIndex][2]
-                path.insert(0, nowStr)
-                if nowStr == beginWord:
+                nowStr, previousStr, nowLevel = visitedInfo[visitedInfoIndex]  # 获得本行
+                path.insert(0, nowStr)  # 头插到路径之中
+                if nowStr == beginWord:  # 路径搜索完毕
                     break
+                # 如果不是endWord，则把当前行移动到相同level的最后面（因为根据后面的算法，每个岔路口的选择是唯一的，这么做就是想让下一次走这个岔路口可以走另一条路，从而不漏掉任何的解）
                 if nowStr != endWord:
-                    newPosition = binary_search([info[2] for info in visitedInfo], nowLevel, mode=2)
-                    visitedInfo.insert(newPosition, visitedInfo.pop(visitedInfoIndex))
-                    visitedInfoIndex = newPosition
+                    newPosition = binary_search([info[2] for info in visitedInfo], nowLevel, mode=2)  # 寻找相同level的最后一个位置
+                    visitedInfo.insert(newPosition, visitedInfo.pop(visitedInfoIndex))  # 把现在这一行挪到这个新位置
+                    visitedInfoIndex = newPosition  # 更新指针，重新指向这里
+                # 使用previousStr向前查找看哪个的nowStr是这个，就说明这是它的前序节点
                 visitedInfoIndex -= 1
                 previousStrIndexInVisitedInfo = None
-                while visitedInfoIndex >= 0:
+                while visitedInfoIndex >= 0:  # 一直找，一定要找到最前的才能保证路径最短，不绕路
                     if visitedInfo[visitedInfoIndex][0] == previousStr:
                         previousStrIndexInVisitedInfo = visitedInfoIndex
                     visitedInfoIndex -= 1
-                visitedInfoIndex = previousStrIndexInVisitedInfo
+                visitedInfoIndex = previousStrIndexInVisitedInfo  # 把最先的前序节点赋值给指针
+            # 路径生成完毕，判断当前路径是否与其他路径有所重合，并更新只保留最短的路径。保证路径一定最短
             if path not in paths:
-                vaild = True
-                for i, existsPath in enumerate(paths):
+                vaild = True  # 是否要添加此路径
+                for i, existsPath in enumerate(paths):  # 如果存在路径与当前路径具有包含或者被包含的关系，则跳过或更新
                     existsPathSet = set(existsPath)
                     nowSet = set(path)
                     if existsPathSet.issubset(nowSet):

@@ -8,13 +8,13 @@ class Solution:
         if not equations:
             return True
         # 相等的公式放前面，先处理相等后处理不等
-        equalEquations, notEqualEqualtions = [], []
+        equalEquations, notEqualEquations = [], []
         for equation in equations:
             if equation[1:3] == '==':
                 equalEquations.append(equation)
             else:
-                notEqualEqualtions.append(equation)
-        equations = equalEquations + notEqualEqualtions
+                notEqualEquations.append(equation)
+        equations = equalEquations + notEqualEquations
         # 开始处理所有的equation
         equalSetList: List[set] = []
         for equation in equations:

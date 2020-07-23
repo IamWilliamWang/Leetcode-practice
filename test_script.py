@@ -1,10 +1,12 @@
+import bisect
+import re
+from functools import wraps, singledispatch
+from itertools import islice
+from math import log2
+import numpy as np
 import sys
 import time
-import bisect
-from typing import List, Tuple, Iterator
-from math import log2
-from functools import wraps
-from itertools import islice
+from typing import List, Tuple, Iterator, Dict
 
 sys.setrecursionlimit(10000)
 
@@ -63,6 +65,49 @@ class Wrappers:
 timer = Wrappers.timer
 deprecated = Wrappers.deprecated()
 
+
+@singledispatch
+def shuffle(iterable) -> None:
+    raise ValueError('Type ' + re.findall("'.+?'", str(type(iterable)))[0] + ' is not supported.')
+
+
+@shuffle.register(list)
+def _(_list) -> list:
+    np.random.shuffle(_list)
+    return _list
+
+
+@shuffle.register(tuple)
+def _(_tuple) -> tuple:
+    _tuple = list(_tuple)
+    np.random.shuffle(_tuple)
+    return tuple(_tuple)
+
+
+@shuffle.register(str)
+def _(_str) -> str:
+    charArray = [ch for ch in _str]
+    np.random.shuffle(charArray)
+    return ''.join(charArray)
+
+
+def _printComparison(results, runtimes):
+    # 输出一致性
+    print('All equals: ', end='')
+    if all([(sorted(result) == sorted(results[0])) if type(result) == list and None not in result else (result == results[0]) for result in results]):  # 如果是list则sort后再比较
+        print('True')
+    else:
+        print('\033[1;31mFalse\033[0m')
+    # 输出执行时间比
+    compareTimesStr = 'Execution time ratio: '
+    runtimesMin = min(runtimes)
+    if runtimesMin == 0.0:
+        return
+    for runtime in runtimes:
+        compareTimesStr += (str(runtime / runtimesMin) if runtime != runtimesMin else '1') + ': '
+    print(compareTimesStr[:-2])
+
+
 _speedtest_counter = 1
 
 
@@ -96,17 +141,7 @@ def speedtest_format(functions, arguments) -> None:
     print(c_style_format % ('Function', 'Return', 'Time'))  # 输出表头
     for i in range(len(results)):  # 输出函数，返回值，执行时间
         print((c_style_format + ' s') % (functions[i].__name__, results[i], runtimes[i]))
-    # 输出一致性
-    print('All equals: ' + str(all(  # 如果是list则sort后再比较
-        [(result == results[0]) if type(result) != list else (sorted(result) == sorted(results[0])) for result in results])))
-    # 输出执行时间比
-    compareTimesStr = 'Execution time ratio: '
-    runtimesMin = min(runtimes)
-    if runtimesMin == 0.0:
-        return
-    for runtime in runtimes:
-        compareTimesStr += (str(runtime / runtimesMin) if runtime != runtimesMin else '1') + ': '
-    print(compareTimesStr[:-2])
+    _printComparison(results, runtimes)
 
 
 def speedtest_realtime(functions, arguments) -> None:
@@ -139,18 +174,8 @@ def speedtest_realtime(functions, arguments) -> None:
         if len(str(results[i])) > columnsize[1]:
             columnsize[1] = len(str(results[i]))
             c_style_format = ('%-{}s|%-{}s|%-{}s'.format(*columnsize))
-        print(c_style_format[c_style_format.find('|') + 1:] % (results[i], runtimes[i]), end='s\n')
-    # 输出一致性
-    print('All equals: ' + str(all(  # 如果是list则sort后再比较
-        [(result == results[0]) if type(result) != list else (sorted(result) == sorted(results[0])) for result in results])))
-    # 输出执行时间比
-    compareTimesStr = 'Execution time ratio: '
-    runtimesMin = min(runtimes)
-    if runtimesMin == 0.0:
-        return
-    for runtime in runtimes:
-        compareTimesStr += (str(runtime / runtimesMin) if runtime != runtimesMin else '1') + ': '
-    print(compareTimesStr[:-2])
+        print((c_style_format[c_style_format.find('|') + 1:] % (results[i], runtimes[i])).strip(), end=' s\n')
+    _printComparison(results, runtimes)
 
 
 speedtest = speedtest_realtime
@@ -251,6 +276,21 @@ class TreeUtil:
             if (i + 1) * 2 < len(nodeHeap):  # 连接每个元素的右子树
                 nodeHeap[i].right = nodeHeap[(i + 1) * 2]
         return nodeHeap[0] if nodeHeap else None
+
+    @staticmethod
+    def createTreeByHeapExpressedByDict(numberDict: Dict[int, object]) -> TreeNode:
+        """
+        根据使用dict表达的heap创建二叉树，返回根部节点
+        :param numberDict: 储存数据的heap对应的dict（index: val）
+        :return:
+        """
+        nodeHeapDict = {index: TreeNode(numberDict[index]) for index in numberDict}  # 把index: val变成index: TreeNode(val)
+        for i in nodeHeapDict:
+            if ((i + 1) * 2 - 1) in nodeHeapDict:  # 连接每个元素的左子树
+                nodeHeapDict[i].left = nodeHeapDict[(i + 1) * 2 - 1]
+            if ((i + 1) * 2) in nodeHeapDict:  # 连接每个元素的右子树
+                nodeHeapDict[i].right = nodeHeapDict[(i + 1) * 2]
+        return nodeHeapDict[0] if 0 in nodeHeapDict else None
 
     @Wrappers.deprecated('createTreeByHeap')
     def createBinaryTree(*args, **kwargs):  # 向后兼容API
@@ -447,6 +487,30 @@ class TreeUtil:
             if node.right:
                 queue.append((node.right, level + 1, (index + 1) * 2))
         return valList
+
+    @staticmethod
+    def toValHeapToDict(rootNode: TreeNode) -> Dict[int, object]:
+        """
+        将根节点代表的树转换成存储各个节点的val的堆，再把堆转换成dict（index: TreeNode）
+        :param rootNode: 根节点
+        :return:
+        """
+        if not rootNode:
+            return {}
+        maxLevel = 1
+        valDict = {}
+        queue = [(rootNode, 1, 0)]  # 储存(节点, 索引号)的队列
+        # 队列不为空时循环（这里为了直观所以用的是广度优先）
+        while queue:
+            node, level, index = queue.pop(0)  # 取出节点和索引号
+            maxLevel = max(maxLevel, level)
+            valDict[index] = node.val
+            # 左右节点和其对应的索引号入队列
+            if node.left:
+                queue.append((node.left, level + 1, (index + 1) * 2 - 1))
+            if node.right:
+                queue.append((node.right, level + 1, (index + 1) * 2))
+        return valDict
 
     @staticmethod
     def toString(rootNode: TreeNode, noneReplacer='X') -> str:
