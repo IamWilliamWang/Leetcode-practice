@@ -91,10 +91,10 @@ def _(_str) -> str:
     return ''.join(charArray)
 
 
-def _printComparison(results, runtimes):
+def _printComparison(results, runtimes, ignoreOrder=True):
     # 输出一致性
     print('All equals: ', end='')
-    if all([(sorted(result) == sorted(results[0])) if type(result) == list and None not in result else (result == results[0]) for result in results]):  # 如果是list则sort后再比较
+    if all((sorted(result) == sorted(results[0])) if type(result) == list and ignoreOrder and None not in result else (result == results[0]) for result in results):  # 如果是list则sort后再比较
         print('True')
     else:
         print('\033[1;31mFalse\033[0m')
@@ -111,11 +111,12 @@ def _printComparison(results, runtimes):
 _speedtest_counter = 1
 
 
-def speedtest_format(functions, arguments) -> None:
+def speedtest_format(functions, arguments, ignoreOrder=True) -> None:
     """
     对相似函数（参数类型都相同）统一进行速度测试，并输出结果
     :param functions: 包含所有函数的tuple或者list
     :param arguments: 包含所有调用参数的tuple或者list
+    :param ignoreOrder: 对结果list的顺序是否忽略
     :return:
     """
     if not functions:
@@ -141,14 +142,15 @@ def speedtest_format(functions, arguments) -> None:
     print(c_style_format % ('Function', 'Return', 'Time'))  # 输出表头
     for i in range(len(results)):  # 输出函数，返回值，执行时间
         print((c_style_format + ' s') % (functions[i].__name__, results[i], runtimes[i]))
-    _printComparison(results, runtimes)
+    _printComparison(results, runtimes, ignoreOrder)
 
 
-def speedtest_realtime(functions, arguments) -> None:
+def speedtest_realtime(functions, arguments, ignoreOrder=True) -> None:
     """
     对相似函数（参数类型都相同）统一进行速度测试，并实时的输出结果，但表格不一定对齐
     :param functions: 包含所有函数的tuple或者list
     :param arguments: 包含所有调用参数的tuple或者list
+    :param ignoreOrder: 对结果list的顺序是否忽略
     :return:
     """
     if not functions:
@@ -175,11 +177,23 @@ def speedtest_realtime(functions, arguments) -> None:
             columnsize[1] = len(str(results[i]))
             c_style_format = ('%-{}s|%-{}s|%-{}s'.format(*columnsize))
         print((c_style_format[c_style_format.find('|') + 1:] % (results[i], runtimes[i])).strip(), end=' s\n')
-    _printComparison(results, runtimes)
+    _printComparison(results, runtimes, ignoreOrder)
 
 
 speedtest = speedtest_realtime
 
+
+def standard(function, retValueStandard):
+    """
+    生成speedtest基准函数
+    :param function: 你的函数
+    :param retValueStandard: 应该返回的值
+    :return: tuple(你的函数, 基准函数)
+    """
+    def truth(*args):
+        return retValueStandard
+
+    return function, truth
 
 # endregion
 
@@ -439,23 +453,18 @@ class TreeUtil:
                 return node
         return None
 
-    _maxLevelCache = {}
-
     @staticmethod
-    def maxLevel(rootNode: TreeNode, cacheEnabled=False) -> int:
+    def maxLevel(rootNode: TreeNode) -> int:
         """
         计算二叉树的最大层数
         :param rootNode: 根节点
-        :param cacheEnabled: 是否使用和储存本树根的最大层数
         :return:
         """
         if not rootNode:
             return 0
-        if cacheEnabled:
-            if rootNode not in TreeUtil._maxLevelCache:  # 不用lru_cache是因为树有可能会变化，会影响到第二次调用
-                TreeUtil._maxLevelCache[rootNode] = len(TreeUtil.breadthFirstTraversal(rootNode))
-            return TreeUtil._maxLevelCache[rootNode]
         return len(TreeUtil.breadthFirstTraversal(rootNode))
+
+    maxDepth = maxLevel
 
     @staticmethod
     def toValHeap(rootNode: TreeNode) -> List[object]:
@@ -540,6 +549,50 @@ class TreeUtil:
 
 
 # endregion
+class LoopQueue:
+    def __init__(self, maxsize=100):
+        self._queue = [None] * (maxsize + 1)
+        self._head = 0
+        self._tail = 0
+        self._maxsize = maxsize + 1
+
+    def offer(self, element):
+        self._queue[self._tail] = element
+        self._tail += 1
+        self._tail %= self._maxsize
+        if self._tail == self._head:
+            self._head += 1
+            self._head %= self._maxsize
+
+    def poll(self):
+        if self.size() < 1:
+            raise ValueError
+        ans = self._queue[self._head]
+        self._head += 1
+        self._head %= self._maxsize
+        return ans
+
+    def size(self):
+        return (self._tail - self._head) % self._maxsize
+
+    def tolist(self):
+        if self._head == self._tail:
+            return []
+        if self._head < self._tail:
+            return self._queue[self._head:self._tail]
+        return self._queue[self._head:] + self._queue[:self._tail]
+
+    def __len__(self):
+        return self.size()
+
+    def __eq__(self, other):
+        if type(self) == type(other):
+            return self.tolist() == other.tolist()
+        return self.tolist() == other
+
+    def __str__(self):
+        return str(self.tolist())
+
 
 # region 常用算法
 class Prime:
