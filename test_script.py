@@ -1,12 +1,13 @@
 import bisect
 import re
-from functools import wraps, singledispatch
-from itertools import islice
-from math import log2
-import numpy as np
 import sys
 import time
-from typing import List, Tuple, Iterator, Dict
+from functools import wraps, singledispatch
+from heapq import heappop, heappush
+from itertools import islice
+from math import log2
+
+import numpy as np
 
 sys.setrecursionlimit(10000)
 
@@ -94,7 +95,8 @@ def _(_str) -> str:
 def _printComparison(results, runtimes, ignoreOrder=True):
     # 输出一致性
     print('All equals: ', end='')
-    if all((sorted(result) == sorted(results[0])) if type(result) == list and ignoreOrder and None not in result else (result == results[0]) for result in results):  # 如果是list则sort后再比较
+    if all((sorted(result) == sorted(results[0])) if type(result) == list and ignoreOrder and None not in result else (
+            result == results[0]) for result in results):  # 如果是list则sort后再比较
         print('True')
     else:
         print('\033[1;31mFalse\033[0m')
@@ -190,10 +192,12 @@ def standard(function, retValueStandard):
     :param retValueStandard: 应该返回的值
     :return: tuple(你的函数, 基准函数)
     """
+
     def truth(*args):
         return retValueStandard
 
     return function, truth
+
 
 # endregion
 
@@ -230,10 +234,10 @@ class TreeNode:
 # region 数据结构的帮助函数
 class ListUtil:
     @staticmethod
-    def createListWithHead(valList: List[object]) -> ListNode:
+    def createListWithHead(valList) -> ListNode:
         """
         创建带有头节点的单向链表。头节点存储链表长度
-        :param valList:
+        :param valList: List[object]
         :return:
         """
         head = ListNode(len(valList))
@@ -245,11 +249,11 @@ class ListUtil:
         return head
 
     @staticmethod
-    def iterator(headNode: ListNode) -> Iterator[ListNode]:
+    def iterator(headNode: ListNode):
         """
         链表的迭代器
-        :param headNode: 头节点
-        :return:
+        :param headNode 头节点
+        :return: Iterator[ListNode]
         """
         while headNode is not None:
             nextNode = headNode.next  # 保证无论该节点发生什么都能按照原先的顺序进行遍历
@@ -257,12 +261,12 @@ class ListUtil:
             headNode = nextNode
 
     @staticmethod
-    def traverse(headNode: ListNode, printWhileTraverse=True) -> List[object]:
+    def traverse(headNode: ListNode, printWhileTraverse=True):
         """
         遍历无头部的单向链表，返回遍历的结果
-        :param headNode: 无头链表的第一个节点
+        :param headNode 无头链表的第一个节点
         :param printWhileTraverse: 是否遍历时输出
-        :return:
+        :return: List[object]
         """
         valList = [node.val for node in list(ListUtil.iterator(headNode))]
         for val in valList:
@@ -275,11 +279,11 @@ class ListUtil:
 
 class TreeUtil:
     @staticmethod
-    def createTreeByHeap(numberList: List[object]) -> TreeNode:
+    def createTreeByHeap(numberList):
         """
         根据heap创建二叉树，返回根部节点
-        :param numberList: 储存数据的heap
-        :return:
+        :param numberList: List[object] 储存数据的heap
+        :return: TreeNode
         """
         nodeHeap = [TreeNode(x) if x is not None else None for x in numberList]  # 把heap转换成TreeNode heap
         for i in range(len(nodeHeap)):  # heap的大小不确定，所以要遍历每个node
@@ -292,11 +296,11 @@ class TreeUtil:
         return nodeHeap[0] if nodeHeap else None
 
     @staticmethod
-    def createTreeByHeapExpressedByDict(numberDict: Dict[int, object]) -> TreeNode:
+    def createTreeByHeapExpressedByDict(numberDict):
         """
         根据使用dict表达的heap创建二叉树，返回根部节点
-        :param numberDict: 储存数据的heap对应的dict（index: val）
-        :return:
+        :param numberDict: Dict[int, object] 储存数据的heap对应的dict（index: val）
+        :return: TreeNode
         """
         nodeHeapDict = {index: TreeNode(numberDict[index]) for index in numberDict}  # 把index: val变成index: TreeNode(val)
         for i in nodeHeapDict:
@@ -311,40 +315,54 @@ class TreeUtil:
         return TreeUtil.createTreeByHeap(*args, **kwargs)
 
     @staticmethod
-    def createTreeByPreInOrder(preorder: List[int], inorder: List[int]) -> TreeNode:
+    def createTreeByPreInOrder(preorder, inorder):
         """
         利用树的先序遍历和中序遍历结果来创建对应的二叉树
-        :param preorder: 先序遍历结果
-        :param inorder: 中序遍历结果
-        :return:
+        :param preorder: List[int] 先序遍历结果
+        :param inorder: List[int] 中序遍历结果
+        :return: TreeNode
         """
         if not preorder or not inorder:
             return None
         root = TreeNode(preorder[0])
-        inorderRootIndex = inorder.index(preorder[0])
-        inorderLeftTree = inorder[:inorderRootIndex]
-        if inorderRootIndex > 0:
-            root.left = TreeUtil.createTreeByPreInOrder(preorder[1:1 + len(inorderLeftTree)], inorderLeftTree)
-        inorderRightTree = inorder[inorderRootIndex + 1:]
-        if 1 + len(inorderLeftTree) < len(preorder):
-            root.right = TreeUtil.createTreeByPreInOrder(preorder[1 + len(inorderLeftTree):], inorderRightTree)
+        inOrderRootIndex = inorder.index(preorder[0])
+        inOrderLeft = inorder[:inOrderRootIndex]
+        inOrderRight = inorder[inOrderRootIndex + 1:]
+        preOrderLeft = preorder[1:1 + len(inOrderLeft)]
+        preOrderRight = preorder[1 + len(inOrderLeft):]
+        root.left = TreeUtil.createTreeByPreInOrder(preOrderLeft, inOrderLeft)
+        root.right = TreeUtil.createTreeByPreInOrder(preOrderRight, inOrderRight)
         return root
 
     @staticmethod
-    def preOrderTraversal(rootNode: TreeNode) -> List[object]:
+    def createTreeByInPostOrder(inorder, postorder):
+        if len(inorder) != len(postorder) or not inorder or not postorder:
+            return None
+        root = TreeNode(postorder[-1])
+        inOrderRootIdx = inorder.index(postorder[-1])
+        inOrderLeft = inorder[:inOrderRootIdx]
+        inOrderRight = inorder[inOrderRootIdx + 1:]
+        postOrderLeft = postorder[:-1 - len(inOrderRight)]
+        postOrderRight = postorder[-1 - len(inOrderRight):-1]
+        root.left = TreeUtil.createTreeByInPostOrder(inOrderLeft, postOrderLeft)
+        root.right = TreeUtil.createTreeByInPostOrder(inOrderRight, postOrderRight)
+        return root
+
+    @staticmethod
+    def preOrderTraversal(rootNode: TreeNode):
         """
         先序遍历，返回遍历结果
-        :param rootNode: 根节点
-        :return:
+        :param rootNode 根节点
+        :return: List[object]
         """
         return [node.val for node in list(TreeUtil.preOrderTraversalIterator(rootNode))]
 
     @staticmethod
-    def preOrderTraversalIterator(rootNode: TreeNode) -> Iterator[TreeNode]:
+    def preOrderTraversalIterator(rootNode: TreeNode):
         """
         先序遍历，返回指向节点的迭代器
-        :param rootNode: 根节点
-        :return:
+        :param rootNode 根节点
+        :return: Iterator[TreeNode]
         """
         if rootNode is not None:
             yield rootNode
@@ -352,20 +370,20 @@ class TreeUtil:
             yield from TreeUtil.preOrderTraversalIterator(rootNode.right)
 
     @staticmethod
-    def inOrderTraversal(rootNode: TreeNode) -> List[object]:
+    def inOrderTraversal(rootNode: TreeNode):
         """
         中序遍历，返回遍历结果
-        :param rootNode: 根节点
-        :return:
+        :param rootNode 根节点
+        :return: List[object]
         """
         return [node.val for node in list(TreeUtil.inOrderTraversalIterator(rootNode))]
 
     @staticmethod
-    def inOrderTraversalIterator(rootNode: TreeNode) -> Iterator[TreeNode]:
+    def inOrderTraversalIterator(rootNode: TreeNode):
         """
         中序遍历，返回指向节点的迭代器
-        :param rootNode: 根节点
-        :return:
+        :param rootNode 根节点
+        :return: Iterator[TreeNode]
         """
         stack = []
         nowNode = rootNode
@@ -384,20 +402,20 @@ class TreeUtil:
                     node = node.left
 
     @staticmethod
-    def postOrderTraversal(rootNode: TreeNode) -> List[object]:
+    def postOrderTraversal(rootNode: TreeNode):
         """
         后序遍历，返回遍历结果
-        :param rootNode: 根节点
-        :return:
+        :param rootNode 根节点
+        :return: List[object]
         """
         return [node.val for node in list(TreeUtil.postOrderTraversalIterator(rootNode))]
 
     @staticmethod
-    def postOrderTraversalIterator(rootNode: TreeNode) -> Iterator[TreeNode]:
+    def postOrderTraversalIterator(rootNode: TreeNode):
         """
         后序遍历，返回指向节点的迭代器
-        :param rootNode: 根节点
-        :return:
+        :param rootNode 根节点
+        :return: Iterator[TreeNode]
         """
         if rootNode is not None:
             yield from TreeUtil.postOrderTraversalIterator(rootNode.left)
@@ -405,24 +423,23 @@ class TreeUtil:
             yield rootNode
 
     @staticmethod
-    def breadthFirstTraversal(rootNode: TreeNode) -> List[list]:
+    def breadthFirstTraversal(rootNode: TreeNode):
         """
         广度优先遍历，返回二维数组，一维是每层的元素List，二维是第几层
-        :param rootNode: 根节点
-        :return:
+        :param rootNode 根节点
+        :return: List[list]
         """
         return list(TreeUtil.breadthFirstTraversalIterator(rootNode))
 
     @staticmethod
-    def breadthFirstTraversalIterator(rootNode: TreeNode) -> Iterator[list]:
+    def breadthFirstTraversalIterator(rootNode: TreeNode):
         """
         广度优先遍历，每次返回一层的元素List
-        :param rootNode: 根节点
-        :return:
+        :param rootNode 根节点
+        :return: Iterator[list]
         """
         resultList = []  # 保存每一层元素的二维数组
         if rootNode is None:
-            yield []
             return
         queue = [(rootNode, 1)]  # 装有(元素, 层号)的队列
         while queue:
@@ -467,11 +484,11 @@ class TreeUtil:
     maxDepth = maxLevel
 
     @staticmethod
-    def toValHeap(rootNode: TreeNode) -> List[object]:
+    def toValHeap(rootNode: TreeNode):
         """
         将根节点代表的树转换成存储各个节点的val的堆
         :param rootNode: 根节点
-        :return:
+        :return: List[object]
         """
 
         def assign(index: int, element):
@@ -498,11 +515,11 @@ class TreeUtil:
         return valList
 
     @staticmethod
-    def toValHeapToDict(rootNode: TreeNode) -> Dict[int, object]:
+    def toValHeapToDict(rootNode: TreeNode):
         """
         将根节点代表的树转换成存储各个节点的val的堆，再把堆转换成dict（index: TreeNode）
         :param rootNode: 根节点
-        :return:
+        :return: Dict[int, object]
         """
         if not rootNode:
             return {}
@@ -548,7 +565,182 @@ class TreeUtil:
         return '\n'.join(lines)
 
 
+class GraphUtil:
+    @staticmethod
+    def BFS(adjMap, start: int):
+        """
+        BFS遍历
+        :param adjMap: Dict[int, List[int]] 使用邻接表表达节点关系
+        :param start: 开始节点
+        :return: List[int] 每次返回遍历的节点号
+        """
+        queue = [start]
+        visited = {start}
+        while queue:
+            node = queue.pop(0)
+            for nextNode in adjMap[node]:
+                if nextNode not in visited:
+                    queue.append(nextNode)
+                    visited.add(nextNode)
+            yield node
+
+    @staticmethod
+    def DFS(adjMap, start: int):
+        """
+        DFS遍历
+        :param adjMap: Dict[int, List[int]] 使用邻接表表达节点关系
+        :param start: 开始节点
+        :return: List[int] 每次返回遍历的节点号
+        """
+        stack = [start]
+        visited = {start}
+        while stack:
+            node = stack.pop()
+            for nextNode in adjMap[node]:
+                if nextNode not in visited:
+                    stack.append(nextNode)
+                    visited.add(nextNode)
+            yield node
+
+    @staticmethod
+    def createMatrix(edges, nodeCount: int):
+        """
+        根据输入的[(from, to)]构建邻接矩阵，或者
+        根据输入的[(from, to, distance)]构建邻接距离矩阵
+        :param edges: List[tuple] from节点, to节点, 边长。节点一定要是从零开始的整数
+        :param nodeCount: 节点数
+        :return:
+        """
+        if len(edges[0]) == 2:
+            matrix = [0 * nodeCount for _ in range(nodeCount)]
+            for fromNode, toNode in edges:
+                matrix[fromNode][toNode] = 1
+            return matrix
+        else:
+            matrix = [[2 ** 31 - 1] * nodeCount for _ in range(nodeCount)]
+            for i in range(nodeCount):
+                matrix[i][i] = 0
+            for fromNode, toNode, distance in edges:
+                matrix[fromNode][toNode] = distance
+            return matrix
+
+    @staticmethod
+    def createMatrixByAdjDict(adjDict):
+        """
+        将邻接表/邻接距离表转换成邻接矩阵/邻接距离矩阵
+        :param adjDict: Dict[int, List[tuple]]
+        :return:
+        """
+        allTuples = []
+        for key in adjDict:
+            allTuples += [tuple([key] + [x for x in tpl]) for tpl in adjDict[key]]
+        return GraphUtil.createMatrix(allTuples, max(adjDict) + 1)
+
+    @staticmethod
+    def dijstra(matrix, start: int):
+        """
+        :param matrix: List[List[int]] 有向图的邻接矩阵，元素代表边的长度
+        :param start: 根节点
+        :return: 最短路径长度(不可达为-1)和最短路径(不可达为[])
+        """
+        assert matrix and len(matrix) == len(matrix[0])
+        shortestDist = [0] * len(matrix)  # 最短路径的长度
+        visited = [False] * len(matrix)  # 最短路径是否已求出
+        path = [[start, i] for i in range(len(matrix))]  # 路径，并初始化
+        shortestDist[start] = 0  # 初始化源节点
+        visited[start] = True
+        for i in range(1, len(matrix)):
+            minNum = 2 ** 31 - 1
+            index = -1
+            for k in range(len(matrix)):
+                # 已经求出的节点不需要再计算
+                if not visited[k] and matrix[start][k] < minNum:
+                    minNum = matrix[start][k]
+                    index = k
+            # 更新最短路径
+            shortestDist[index] = minNum
+            visited[index] = True
+            # 更新从index跳到其它节点的较短路径
+            for k in range(len(matrix)):
+                if not visited[k] and matrix[start][index] + matrix[index][k] < matrix[start][k]:
+                    matrix[start][k] = matrix[start][index] + matrix[index][k]
+                    path[k] = path[index].copy() + [k]
+        path[start].pop()
+        for i in range(len(shortestDist)):
+            if shortestDist[i] >= 2 ** 31 - 1:
+                shortestDist[i] = -1
+                path[i] = []
+        return shortestDist, path
+
+    @staticmethod
+    def getCircles(matrix, startNode: int):
+        """
+        获得所有环的路径
+        :param matrix: List[List[int]] 邻接矩阵
+        :param startNode: 从哪个点开始DFS
+        :return:
+        """
+
+        def findCycle(v):
+            if v in trace:
+                yield trace[trace.index(v):]
+                return
+            trace.append(v)
+            for i in range(len(matrix)):
+                if matrix[v][i] != 0:
+                    yield from findCycle(i)
+            trace.pop()
+
+        trace = []
+        yield from findCycle(startNode)
+
+    @staticmethod
+    def kruskal(graph):
+        """
+        根据邻接距离表生成最小生成树
+        :param graph: Dict[int, List[Tuple[int, int]]]
+        :return:
+        """
+        N = len(graph)  # 得到图中点的个数
+        mst, edges = [], []
+        reps = list(range(N))  # 初始化代表元
+        for vi in range(N):  # 收集各边
+            for vj, weight in graph[vi]:
+                edges.append((weight, vi, vj))
+        edges.sort()  # 将边按权值weight从小到大排序
+        for weight, vi, vj in edges:  # 逐个遍历边，将其加入到mst中
+            if reps[vi] != reps[vj]:
+                mst.append((vi, vj, weight))
+                for v in range(N):  # 更新代表元
+                    if reps[v] == reps[vj]:
+                        reps[v] = reps[vi]
+        return mst
+
+    @staticmethod
+    def prim(graph):
+        """
+        根据邻接距离表生成最小生成树
+        :param graph: Dict[int, List[Tuple[int, int]]]
+        :return:
+        """
+        N = len(graph)
+        edges = [(0, 0, 0)]  # 每次将新边加入到一个优先队列中
+        mst = [None] * N  # 用于判断边所连接的点是否已经遍历过
+        edge_count = 0
+        while edge_count < N and edges:
+            weight, vi, vj = heappop(edges)
+            if not mst[vj]:
+                edge_count += 1
+                mst[vj] = (vi, weight)
+                for i, w in graph[vj]:  # 将新点的出边加入优先队列
+                    if not mst[i]:
+                        heappush(edges, (w, vj, i))
+        return mst
+
+
 # endregion
+
+
 class LoopQueue:
     def __init__(self, maxsize=100):
         self._queue = [None] * (maxsize + 1)
@@ -601,7 +793,7 @@ class Prime:
     """
 
     def __init__(self):
-        self._list: List[int] = [2, 3, 5, 7, 11, 13]  # 保存所有现有的素数列表
+        self._list = [2, 3, 5, 7, 11, 13]  # 保存所有现有的素数列表
 
     def __contains__(self, n: int) -> bool:
         """
@@ -629,11 +821,11 @@ class Prime:
             self._extendToLen(i + 1)  # 拓展list长度直到n
             return self._list[i]  # 返回第n个元素
 
-    def indexOf(self, n: int) -> Tuple[int, int]:
+    def indexOf(self, n: int):
         """
         获得数字n位于素数列表的第几个位置，或者哪两个位置之间
         :param n: 要搜索的素数
-        :return: 如果搜到则返回(index, index)；搜不到则返回n的大小在哪两个相邻位置之间(from, to)
+        :return: Tuple[int, int] 如果搜到则返回(index, index)；搜不到则返回n的大小在哪两个相邻位置之间(from, to)
         """
         if n < 2:
             return -1, 0
@@ -655,13 +847,13 @@ class Prime:
             return islice(self._list, start, stop, step)  # 生成切片后的迭代器
         return islice(self, start, None, step)  # 只有没指定stop时制造迭代器的切片，返回指向n.start位置的迭代器
 
-    def primeRange(self, minN: int, maxN: int, step=1) -> Iterator:
+    def primeRange(self, minN: int, maxN: int, step=1):
         """
         返回包含[minN, maxN)内所有素数的迭代器
         :param minN: 素数最小值
         :param maxN: 素数最大值（不包括）
         :param step: 遍历的步伐，默认为1
-        :return: 迭代器
+        :return: Iterator 迭代器
         """
         minN = max(2, minN)  # 开始值合法化
         if minN >= maxN:  # 异常参数检查
@@ -772,14 +964,13 @@ class BisectUtil:
         raise ValueError
 
 
-def binary_search(nums: List[object], target: object, mode=0, key=None, reverse=False):  # 提示：完美版本，请勿修改
+def binary_search(nums, target: object, mode=0, key=None):
     """
     二分查找法，返回target出现的位置，找不到返回-1。也可以搜索左边界(首次出现的位置)和右边界(最后出现的位置)，找不到返回-1
-    :param nums: 整形或者object数组（默认为升序）
+    :param nums: List[object] 整形或者object数组（默认为升序）
     :param target: 要查找的数字或者object（如果是数组里的是object而target是其里面的变量则需要传入key；如果数组和target是同一个类则需要实现该类的__lt__, __gt__和__eq__）
     :param mode: 0为二分查找，1为左边界搜索，2为右边界搜索
     :param key: 搜索时用什么值进行比较
-    :param reverse: nums数组是否为降序
     :link: https://leetcode-cn.com/problems/find-first-and-last-position-of-element-in-sorted-array/solution/er-fen-cha-zhao-suan-fa-xi-jie-xiang-jie-by-labula/
     :return:
     """
@@ -789,9 +980,9 @@ def binary_search(nums: List[object], target: object, mode=0, key=None, reverse=
     right = len(nums) - 1
     while left <= right:
         mid = (left + right) // 2
-        if (not reverse and key(nums[mid]) < target) or (reverse and key(nums[mid]) > target):
+        if key(nums[mid]) < target:
             left = mid + 1
-        elif (not reverse and key(nums[mid]) > target) or (reverse and key(nums[mid]) < target):
+        elif key(nums[mid]) > target:
             right = mid - 1
         elif key(nums[mid]) == target:
             if mode == 1:
@@ -817,15 +1008,79 @@ def binary_search(nums: List[object], target: object, mode=0, key=None, reverse=
         return -1
 
 
+class BinaryIndexTree:
+    # 树状数组。适用于sum()调用频繁的情况
+    def __init__(self, array: list):
+        self._array = [0] + array
+        for i in range(1, len(self._array)):
+            j = i + self._lowbit(i)
+            if j < len(self._array):
+                self._array[j] += self._array[i]
+
+    def __getitem__(self, item: int):
+        return self.sum(item, item + 1)
+
+    def __setitem__(self, idx: int, val: int):
+        prev = self.sum(idx, idx + 1)  # 原来的值
+        idx += 1
+        val -= prev  # 要增加的值
+        while idx < len(self._array):
+            self._array[idx] += val
+            idx += self._lowbit(idx)
+
+    def _lowbit(self, x: int) -> int:
+        return x & (-x)
+
+    def sum(self, start: int, stop: int) -> int:
+        return self.sumBefore(stop) - self.sumBefore(start)
+
+    def sumBefore(self, stop=0) -> int:
+        if stop < 1:
+            stop = len(self._array) - 1
+        res = 0
+        while stop > 0:
+            res += self._array[stop]
+            stop -= self._lowbit(stop)
+        return res
+
+
+def mergeSort(nums: list):
+    def merge(start, mid, end):
+        i, j, mergedList = start, mid + 1, []
+        while i <= mid and j <= end:
+            if nums[i] <= nums[j]:  # 左边的小
+                mergedList.append(nums[i])
+                i += 1
+            else:  # 右边的小
+                # self.cnt += mid - i + 1
+                mergedList.append(nums[j])
+                j += 1
+        while i <= mid:
+            mergedList.append(nums[i])
+            i += 1
+        while j <= end:
+            mergedList.append(nums[j])
+            j += 1
+
+        for i in range(len(mergedList)):
+            nums[start + i] = mergedList[i]
+
+    def _mergeSort(start, end):
+        if start >= end:
+            return
+        mid = (start + end) // 2
+        _mergeSort(start, mid)  # 分为[start, mid], [mid + 1, end]
+        _mergeSort(mid + 1, end)
+        merge(start, mid, end)
+
+    _mergeSort(0, len(nums) - 1)
+
+
 # endregion
 
 if __name__ == '__main__':
-    # root = TreeUtil.createBinaryTree([-5, -1, -4, None, None, -5, 0, None, None, None, None, -5, None, -1, 2])
-    # root.right.right.left.right = TreeUtil.createBinaryTree([-3, None, -5, None, None, None, -4])
-    root = TreeUtil.createTreeByPreInOrder(preorder=[-5, -1, -4, -5, -5, 0, -1, -3, -5, -4, 2],
-                                           inorder=[-1, -5, -5, -5, -4, -1, -3, -5, -4, 0, 2])
-    print(TreeUtil.breadthFirstTraversal(root))
-    print(root)
+    N = int(input().strip())
+    numbers = list(map(int, input().strip().split()))
 
 '''数据结构图
 DataStructure = {'Collections': {'Map': [('dict', 'OrderDict', 'defaultdict'),

@@ -18,7 +18,7 @@ class Solution:
         visited = set()
 
         def next():
-            minCost, minCostNode = 2 ** 31 - 1, None
+            minCostNode, minCost = None, 2 ** 31 - 1
             for node, cost in enumerate(costs):
                 if node in visited:
                     continue
@@ -36,12 +36,12 @@ class Solution:
                 node, cost = next()
                 if not node:
                     break
+                visited.add(node)
                 adjNodes = edges[node]
                 for adjNode, edgeCost in adjNodes:
                     new_cost = cost + edgeCost
                     if new_cost < costs[adjNode]:
                         costs[adjNode] = new_cost
-                visited.add(node)
 
         dijkstra(src)
         return [cost if cost != 2 ** 31 - 1 else -1 for cost in costs]
